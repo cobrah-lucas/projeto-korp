@@ -38,7 +38,8 @@ Implementação de um servidor HTTP em Go, containerizado com Docker, monitorado
 ## ▶️ Como Executar (via Docker Compose)
 
 ```bash
-git clone https://github.com/seu-usuario/projeto-korp.git
+git clone https://github.com/cobrah-lucas/projeto-korp.git
+
 cd projeto-korp
 docker-compose up -d
 curl http://localhost/projeto-korp    https://github.com/cobrah-lucas/projeto-korp/tree/main/grafana/provisioning/dashboards       
