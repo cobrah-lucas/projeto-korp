@@ -1,0 +1,139 @@
+---
+- name: Provisionar ambiente completo do Projeto Korp
+  hosts: all
+  become: yes
+  vars:
+    project_dir: /opt/projeto-korp
+
+  tasks:
+    - name: Instalar dependências básicas
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - python3-pip
+          - git
+        update_cache: yes
+        state: present
+
+    - name: Adicionar chave GPG oficial do Docker (modo moderno)
+      shell: |
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+      args:
+        creates: /usr/share/keyrings/docker-archive-keyring.gpg
+
+    - name: Instalar Docker Engine
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        update_cache: yes
+        state: present
+
+    - name: Iniciar e habilitar Docker
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Criar diretório do projeto e subdiretórios
+      file:
+        path: "{{ project_dir }}/{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - http-server
+        - nginx
+        - prometheus
+        - grafana/provisioning/datasources
+        - grafana/provisioning/dashboards
+
+    - name: Copiar código fonte do servidor Go
+      copy:
+        src: ../http-server/
+        dest: "{{ project_dir }}/http-server/"
+        mode: preserve
+
+    - name: Copiar configuração do NGINX
+      copy:
+        src: ../nginx/http-server-projeto-korp.conf
+        dest: "{{ project_dir }}/nginx/http-server-projeto-korp.conf"
+        mode: '0644'
+
+    - name: Copiar configuração do Prometheus
+      copy:
+        src: ../prometheus/prometheus.yml
+        dest: "{{ project_dir }}/prometheus/prometheus.yml"
+        mode: '0644'
+
+    - name: Copiar provisionamento do Grafana
+      copy:
+        src: ../grafana/provisioning/
+        dest: "{{ project_dir }}/grafana/provisioning/"
+        mode: preserve
+
+    - name: Copiar docker-compose.yml
+      copy:
+        src: ../docker-compose.yml
+        dest: "{{ project_dir }}/docker-compose.yml"
+        mode: '0644'
+
+    - name: Criar rede Docker bridge (garantir existência)
+      docker_network:
+        name: korp-net
+        driver: bridge
+        state: present
+
+    - name: Construir imagem do serviço HTTP
+      docker_image:
+        name: http-server-projeto-korp
+        build:
+          path: "{{ project_dir }}/http-server"
+        source: build
+        state: present
+
+    - name: Executar docker-compose up (versão v2)
+      community.docker.docker_compose_v2:
+        project_src: "{{ project_dir }}"
+        state: present
+        recreate: auto
+
+    - name: Aguardar serviço HTTP ficar disponível
+      uri:
+        url: "http://localhost:80/health"
+        status_code: 200
+      register: result
+      until: result.status == 200
+      retries: 30
+      delay: 2
+
+    - name: Testar endpoint /projeto-korp
+      uri:
+        url: "http://localhost:80/projeto-korp"
+        return_content: yes
+      register: api_response
+
+    - name: Exibir resposta da API
+      debug:
+        msg: "Resposta do serviço: {{ api_response.content }}"
+
+    - name: Validar que o JSON contém os campos esperados
+      assert:
+        that:
+          - api_response.json.nome == "Projeto Korp"
+          - api_response.json.horario is defined
+        success_msg: "Validação do endpoint concluída com sucesso!"
+        fail_msg: "Resposta da API inválida"
+
+    - name: Exibir URLs de acesso
+      debug:
+        msg:
+          - "Serviço disponível em: http://{{ ansible_default_ipv4.address }}/projeto-korp"
+          - "Prometheus: http://{{ ansible_default_ipv4.address }}:9090"
+          - "Grafana: http://{{ ansible_default_ipv4.address }}:3000 (usuário: admin, senha: admin)"
