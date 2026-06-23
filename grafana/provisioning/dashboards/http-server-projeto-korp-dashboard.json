@@ -1,0 +1,54 @@
+{
+  "dashboard": {
+    "title": "Monitoramento - Projeto Korp",
+    "timezone": "utc",
+    "panels": [
+      {
+        "title": "Disponibilidade do Serviço",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "service_availability",
+            "legendFormat": "Disponível (1=sim, 0=não)"
+          }
+        ],
+        "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 }
+      },
+      {
+        "title": "Requisições por Segundo",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])",
+            "legendFormat": "{{endpoint}} - {{status}}"
+          }
+        ],
+        "gridPos": { "x": 6, "y": 0, "w": 18, "h": 8 }
+      },
+      {
+        "title": "Total de Requisições (Acumulado)",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(http_requests_total)",
+            "legendFormat": "Requisições totais"
+          }
+        ],
+        "gridPos": { "x": 0, "y": 4, "w": 6, "h": 4 }
+      },
+      {
+        "title": "Requisições por Endpoint",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "sum by (endpoint) (http_requests_total)",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+      }
+    ],
+    "refresh": "30s"
+  },
+  "overwrite": true
+}
